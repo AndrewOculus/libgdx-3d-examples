@@ -45,6 +45,7 @@ public class MyGdxGame extends ApplicationAdapter {
 	Model model;
 	PerspectiveCamera camera;
 	WorldPhysics worldPhysics;
+	float spawnTime = 3f;
 
 	@Override
 	public void create() {
@@ -69,6 +70,12 @@ public class MyGdxGame extends ApplicationAdapter {
 		float dt = Gdx.graphics.getDeltaTime();
 		gameRenderer.render(dt);
 		camera.rotateAround(Vector3.Zero, Vector3.Y, -Gdx.input.getDeltaX()/5f);
+		
+		if((spawnTime-=dt) < 0)
+		{
+			worldPhysics.Instantiate(3,MathUtils.random(0,360),0,0,MathUtils.random(-2.5f,2.5f),9,MathUtils.random(-2.5f,2.5f));
+			spawnTime = 3;
+		}
 	}
 
 	@Override
@@ -205,9 +212,10 @@ class WorldPhysics implements Disposable
         instances.add(object);
 		dynamicsWorld.addRigidBody(object.body, GROUND_FLAG, ALL_FLAG);
 		
-		spawn();
+		//spawn();
 	}
 	
+	@Deprecated
 	public void spawn () {
         GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
         obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
@@ -219,6 +227,24 @@ class WorldPhysics implements Disposable
         dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, GROUND_FLAG);
     }
 
+	public GameObject Instantiate(int item ,float eX, float eY, float eZ, float pX,float pY, float pZ){
+		GameObject go = Instantiate(constructors, item,eX,eY,eZ,pX,pY,pZ);
+		instances.add(go);
+        dynamicsWorld.addRigidBody(go.body, OBJECT_FLAG, GROUND_FLAG);
+		return go;
+	}
+	
+	public GameObject Instantiate(ArrayMap<String, GameObject.Constructor> consructor,int item, float eX, float eY, float eZ, float pX,float pY, float pZ){
+		GameObject obj = constructors.values[item].construct();
+        obj.transform.setFromEulerAngles(eX,eY,eZ);
+        obj.transform.trn(pX, pY, pZ);
+        obj.body.setWorldTransform(obj.transform);
+        obj.body.setUserValue(instances.size);
+        obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
+    
+		return obj;
+	}
+	
 	public Array<GameObject> getGameObjects(){
 		return instances;
 	}
@@ -248,8 +274,7 @@ class Model3dLoader{
 		mb.part("sphere", GL20.GL_TRIANGLES,VertexAttributes. Usage.Position |VertexAttributes. Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.GREEN)))
 			.sphere(1f, 1f, 1f, 10, 10);
 		mb.node().id = "box";
-		mb.part("box", GL20.GL_TRIANGLES,VertexAttributes. Usage.Position |VertexAttributes. Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.BLUE)))
-			.box(1f, 1f, 1f);
+		mb.part("box", GL20.GL_TRIANGLES,VertexAttributes.Usage.Position |VertexAttributes. Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.BLUE))).box(1f, 1f, 1f);
 		mb.node().id = "cone";
 		mb.part("cone", GL20.GL_TRIANGLES,VertexAttributes. Usage.Position |VertexAttributes. Usage.Normal, new Material(ColorAttribute.createDiffuse(Color.YELLOW)))
 			.cone(1f, 2f, 1f, 10);
