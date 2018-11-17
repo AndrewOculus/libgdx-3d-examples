@@ -37,11 +37,12 @@ import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.utils.*;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.math.*;
+import com.badlogic.gdx.*;
 
 public class MyGdxGame extends ApplicationAdapter {
 
 	GameRenderer gameRenderer;
-	List<ModelInstance> models;
+	Model model;
 	PerspectiveCamera camera;
 	WorldPhysics worldPhysics;
 
@@ -49,16 +50,15 @@ public class MyGdxGame extends ApplicationAdapter {
 	public void create() {
 		super.create();
 
-		camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		camera = new PerspectiveCamera(60, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		camera.near = 1;
 		camera.far = 300;
 		camera.position.set(15, 15, 15);
 		camera.lookAt(0,0,0);
 		camera.update();
-
-		worldPhysics = new WorldPhysics();
-
-		models = Model3dLoader.load();
+		
+		model = Model3dLoader.load();
+		worldPhysics = new WorldPhysics(model);
 		gameRenderer = new GameRenderer(camera, worldPhysics);
 			
 	}
@@ -67,7 +67,8 @@ public class MyGdxGame extends ApplicationAdapter {
 	public void render() {
 		super.render();
 		float dt = Gdx.graphics.getDeltaTime();
-		gameRenderer.render(dt, models);
+		gameRenderer.render(dt);
+		camera.rotateAround(Vector3.Zero, Vector3.Y, -Gdx.input.getDeltaX()/5f);
 	}
 
 	@Override
@@ -85,6 +86,8 @@ class GameRenderer implements Disposable
 	private Environment environment;
 	private DebugDrawer debugDrawer;
 	private WorldPhysics worldPhysics;
+	private ArrayMap<String, GameObject.Constructor> constructors;
+	private Array<GameObject> instances;
 
 	public GameRenderer(PerspectiveCamera camera, WorldPhysics worldPhysics) {
 		this.camera = camera;
@@ -96,41 +99,46 @@ class GameRenderer implements Disposable
 		
 		this.debugDrawer = new DebugDrawer();
 		this.debugDrawer.setDebugMode(btIDebugDraw.DebugDrawModes.DBG_MAX_DEBUG_DRAW_MODE);
-
+        
 		this.worldPhysics = worldPhysics;
 	}
 
-	public void render(float dt ,List<ModelInstance> models) {
+	public void render(float dt) {
 		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 		
 		batch.begin(camera);
-		/*
-		for( ModelInstance md : models){
-			batch.render(md, environment);
-		}
-		*/
-		worldPhysics.render(dt, batch, environment);
+		worldPhysics.update(dt);
+		batch.render(worldPhysics.getGameObjects(),environment);
 		batch.end();
-		
-		
-		debugDrawer.begin(camera);
-		worldPhysics.debugDraw();
-		debugDrawer.end();
-		
+		//debugDrawer.begin(camera);
+		//worldPhysics.debugDraw();
+		//debugDrawer.end();
 		camera.update();
-		
-
 	}
 
 	@Override
 	public void dispose()
 	{
 		batch.dispose();
+		
 	}
 }
 
-class WorldPhysics{
+class WorldPhysics implements Disposable
+{
+
+	@Override
+	public void dispose()
+	{
+		dynamicsWorld.dispose();
+		collisionConfiguration.dispose();
+		dispatcher.dispose();
+		broadphaseInterface.dispose();
+		constraintSolver.dispose();
+		contactListener.dispose();
+	}
+
 
 	class MotionState extends btMotionState {
 	    Matrix4 transform;
@@ -172,7 +180,7 @@ class WorldPhysics{
 	float spawnTimer= 0;
 	
 	
-	public WorldPhysics() {
+	public WorldPhysics(Model model) {
 		Bullet.init();
 		
 		collisionConfiguration = new btDefaultCollisionConfiguration();
@@ -183,6 +191,54 @@ class WorldPhysics{
 		dynamicsWorld.setGravity(new Vector3(0, -10f, 0));
 		contactListener = new MyContactListener();
 		
+		constructors = new ArrayMap<String, GameObject.Constructor>(String.class, GameObject.Constructor.class);
+        constructors.put("ground", new GameObject.Constructor(model, "ground", new btBoxShape(new Vector3(2.5f, 0.5f, 2.5f)), 0f));
+        constructors.put("sphere", new GameObject.Constructor(model, "sphere", new btSphereShape(0.5f), 1f));
+        constructors.put("box", new GameObject.Constructor(model, "box", new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
+        constructors.put("cone", new GameObject.Constructor(model, "cone", new btConeShape(0.5f, 2f), 1f));
+        constructors.put("capsule", new GameObject.Constructor(model, "capsule", new btCapsuleShape(.5f, 1f), 1f));
+        constructors.put("cylinder", new GameObject.Constructor(model, "cylinder", new btCylinderShape(new Vector3(.5f, 1f, .5f)), 1f));
+
+        instances = new Array<GameObject>();
+		
+		GameObject object = constructors.get("ground").construct();
+        instances.add(object);
+		dynamicsWorld.addRigidBody(object.body, GROUND_FLAG, ALL_FLAG);
+		
+		spawn();
+	}
+	
+	public void spawn () {
+        GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
+        obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
+        obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 9f, MathUtils.random(-2.5f, 2.5f));
+        obj.body.setWorldTransform(obj.transform);
+        obj.body.setUserValue(instances.size);
+        obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
+        instances.add(obj);
+        dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, GROUND_FLAG);
+    }
+
+	public Array<GameObject> getGameObjects(){
+		return instances;
+	}
+	
+	public void update(float dt){
+		final float delta = Math.min(1f / 30f, dt);
+        dynamicsWorld.stepSimulation(delta, 5, 1f/60f);
+		
+		for (GameObject obj : instances)
+			obj.body.getWorldTransform(obj.transform);
+	}
+	
+	public void debugDraw() {
+		dynamicsWorld.debugDrawWorld();
+	}
+	
+}
+
+class Model3dLoader{
+	public static Model load(){
 		ModelBuilder mb = new ModelBuilder();
 		mb.begin();
 		mb.node().id = "ground";
@@ -203,90 +259,7 @@ class WorldPhysics{
 		mb.node().id = "cylinder";
 		mb.part("cylinder", GL20.GL_TRIANGLES,VertexAttributes. Usage.Position | VertexAttributes.Usage.Normal,
 				new Material(ColorAttribute.createDiffuse(Color.MAGENTA))).cylinder(1f, 2f, 1f, 10);
-		Model model = mb.end();
-		
-		constructors = new ArrayMap<String, GameObject.Constructor>(String.class, GameObject.Constructor.class);
-        constructors.put("ground", new GameObject.Constructor(model, "ground", new btBoxShape(new Vector3(2.5f, 0.5f, 2.5f)), 0f));
-        constructors.put("sphere", new GameObject.Constructor(model, "sphere", new btSphereShape(0.5f), 1f));
-        constructors.put("box", new GameObject.Constructor(model, "box", new btBoxShape(new Vector3(0.5f, 0.5f, 0.5f)), 1f));
-        constructors.put("cone", new GameObject.Constructor(model, "cone", new btConeShape(0.5f, 2f), 1f));
-        constructors.put("capsule", new GameObject.Constructor(model, "capsule", new btCapsuleShape(.5f, 1f), 1f));
-        constructors.put("cylinder", new GameObject.Constructor(model, "cylinder", new btCylinderShape(new Vector3(.5f, 1f, .5f)), 1f));
-		
-		
-        instances = new Array<GameObject>();
-        GameObject object = constructors.get("ground").construct();
-        instances.add(object);
-        dynamicsWorld.addRigidBody(object.body, GROUND_FLAG, ALL_FLAG);
-		
-		spawn();
-	}
-	
-	public void spawn () {
-        GameObject obj = constructors.values[1 + MathUtils.random(constructors.size - 2)].construct();
-        obj.transform.setFromEulerAngles(MathUtils.random(360f), MathUtils.random(360f), MathUtils.random(360f));
-        obj.transform.trn(MathUtils.random(-2.5f, 2.5f), 9f, MathUtils.random(-2.5f, 2.5f));
-        obj.body.setWorldTransform(obj.transform);
-        obj.body.setUserValue(instances.size);
-        obj.body.setCollisionFlags(obj.body.getCollisionFlags() | btCollisionObject.CollisionFlags.CF_CUSTOM_MATERIAL_CALLBACK);
-        instances.add(obj);
-        dynamicsWorld.addRigidBody(obj.body, OBJECT_FLAG, GROUND_FLAG);
-    }
-	
-	public btRigidBody AddRigidbody(Array<Node> nodes , Matrix4 transform) {
-
-		MotionState state = new MotionState();
-		state.setWorldTransform(transform);
-
-		btCollisionShape shape = Bullet.obtainStaticNodeShape(nodes);
-
-		btRigidBody rigidBody = new btRigidBody(0,state,shape);
-		dynamicsWorld.addRigidBody(rigidBody);
-
-		return rigidBody;
-	}
-
-	public Array<GameObject> getGameobjects(){
-		return instances;
-	}
-	
-	public void render(float dt , ModelBatch batch , Environment environment){
-		
-		final float delta = Math.min(1f / 30f, Gdx.graphics.getDeltaTime());
-
-        dynamicsWorld.stepSimulation(delta, 5, 1f/60f);
-		for (GameObject obj : instances)
-			obj.body.getWorldTransform(obj.transform);
-		
-		batch.render(instances,environment);
-		
-		if ((spawnTimer -= delta) < 0) {
-			spawn();
-			spawnTimer = 1.5f;
-		}
-		
-	}
-	
-	public void debugDraw() {
-		dynamicsWorld.debugDrawWorld();
-	}
-	
-}
-
-class Model3dLoader{
-	public static List<ModelInstance> load(){
-		List<ModelInstance> lst = new ArrayList<ModelInstance>();
-		
-		ModelBuilder modelBuilder = new ModelBuilder();
-		
-        Model model = modelBuilder.createBox(5f, 5f, 5f, 
-		   new Material(ColorAttribute.createDiffuse(Color.GREEN)),
-		   VertexAttributes. Usage.Position | VertexAttributes. Usage.Normal);
-		   
-		   
-        lst.add(new ModelInstance(model));
-		
-		return lst;
+		return mb.end();
 	}
 }
 
