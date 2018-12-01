@@ -47,6 +47,8 @@ public class MyGdxGame extends ApplicationAdapter {
 		hero = worldPhysics.Instantiate(1, 0, 0, 0, 0, 5, 0, OBJECT_FLAG, GROUND_FLAG);
 		heroImpuls = new Vector3(0,0,0);
 		cameraDir = new Vector3(0,0,0);
+		
+		
 	}
 
 	@Override
