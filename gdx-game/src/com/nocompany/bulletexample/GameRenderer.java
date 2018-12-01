@@ -39,6 +39,8 @@ import com.badlogic.gdx.utils.*;
 import com.badlogic.gdx.physics.bullet.collision.*;
 import com.badlogic.gdx.math.*;
 import com.badlogic.gdx.*;
+import java.security.*;
+import com.badlogic.gdx.scenes.scene2d.actions.*;
 
 class GameRenderer implements Disposable
 {
@@ -206,8 +208,10 @@ class WorldPhysics implements Disposable
 		final float delta = Math.min(1f / 30f, dt);
         dynamicsWorld.stepSimulation(delta, 5, 1f/60f);
 
-		for (GameObject obj : instances)
+		for (GameObject obj : instances){
+			obj.updateActiona(dt);
 			obj.body.getWorldTransform(obj.transform);
+		}
 	}
 
 	public void debugDraw() {
@@ -216,14 +220,38 @@ class WorldPhysics implements Disposable
 
 }
 
+class Action{
+	
+	public void begin(GameObject sepf){
+		
+	}
+	
+	public void update (float dt ,GameObject self){
+		
+	}
+}
+
 class GameObject extends ModelInstance implements Disposable {
 
 	public final btRigidBody body;
 	public boolean moving;
+	public List<Action> actions;
 
 	public GameObject (Model model, String node, btRigidBody.btRigidBodyConstructionInfo constructionInfo) {
 		super(model, node);
 		body = new btRigidBody(constructionInfo);
+		actions = new ArrayList<Action>();
+	}
+	
+	public void addAction(Action act){
+		actions.add(act);
+		act.begin(this);
+	}
+	
+	public void updateActiona(float dt){
+		for(Action act : actions){
+			act.update(dt,this);
+		}
 	}
 	
 	@Override

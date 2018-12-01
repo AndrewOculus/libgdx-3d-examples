@@ -37,7 +37,18 @@ public class MyGdxGame extends ApplicationAdapter {
 		worldPhysics = new WorldPhysics(model);
 		gameRenderer = new GameRenderer(camera, worldPhysics);
 			
-		worldPhysics.Instantiate(0, 0, 0 , 5, 0,0,5, GROUND_FLAG, ALL_FLAG);
+		GameObject go = worldPhysics.Instantiate(0, 0, 0 , 5, 0,0,5, GROUND_FLAG, ALL_FLAG);
+		go.addAction(new Action(){
+			public void begin(GameObject go){
+				
+			}
+			
+			public void update(float dt , GameObject  go){
+				
+			}
+			
+		});
+		
 		worldPhysics.Instantiate(0, 0, 0 , 5, 0,0,10, GROUND_FLAG, ALL_FLAG);
 		worldPhysics.Instantiate(0, 0, 0 , -5, 0,0,15, GROUND_FLAG, ALL_FLAG);
 		worldPhysics.Instantiate(0, 0, 0 , 0, 0,0,20, GROUND_FLAG, ALL_FLAG);
