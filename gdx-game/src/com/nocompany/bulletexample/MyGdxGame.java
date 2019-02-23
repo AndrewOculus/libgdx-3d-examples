@@ -38,13 +38,23 @@ public class MyGdxGame extends ApplicationAdapter {
 		gameRenderer = new GameRenderer(camera, worldPhysics);
 			
 		GameObject go = worldPhysics.Instantiate(0, 0, 0 , 5, 0,0,5, GROUND_FLAG, ALL_FLAG);
+		
 		go.addAction(new Action(){
+			
+			private Vector3 velo;
+			private float timer;
+			
 			public void begin(GameObject go){
-				
+				//go.body.setGravity(Vector3.Zero);
+				//go.body.
+				velo = new Vector3();
 			}
 			
 			public void update(float dt , GameObject  go){
-				
+				go.body.activate();
+				timer+=dt;
+				velo.set(0,2*dt*(float)Math.sin(timer),0);
+				go.body.translate(velo);
 			}
 			
 		});
@@ -56,6 +66,26 @@ public class MyGdxGame extends ApplicationAdapter {
 		joystick = new JoystickController(100, 100, 50);
 		
 		hero = worldPhysics.Instantiate(1, 0, 0, 0, 0, 5, 0, OBJECT_FLAG, GROUND_FLAG);
+		
+		hero.addAction(new Action(){
+			
+			private Vector3 vel,oldVel;
+			
+			public void begin(GameObject go){
+				vel = new Vector3();
+				oldVel = new Vector3();
+			}
+			
+			public void update(float dt, GameObject go){
+				go.body.activate();
+				go.body.getVelocityInLocalPoint(oldVel);
+				vel.set(Gdx.input.getX()/1000f, oldVel.y, Gdx.input.getY()/1000f);
+				if(Gdx.input.isTouched())
+				go.body.setLinearVelocity(vel);
+			}
+			
+		});
+		
 		heroImpuls = new Vector3(0,0,0);
 		cameraDir = new Vector3(0,0,0);
 		
@@ -69,7 +99,7 @@ public class MyGdxGame extends ApplicationAdapter {
 		gameRenderer.render(dt);
 		
 		camera.rotateAround(Vector3.Zero, Vector3.Y, -Gdx.input.getDeltaX()/5f);
-		
+		/*
 		cameraDir.set(camera.direction);
 		Vector3 left = cameraDir.crs(Vector3.Y);
 		Vector3 forward = left.rotate(Vector3.Y ,90);
@@ -77,6 +107,7 @@ public class MyGdxGame extends ApplicationAdapter {
 		hero.body.applyCentralImpulse(heroImpuls);
 		hero.body.activate();
 		joystick.update(dt);
+		*/
 		/*
 		if((spawnTime-=dt) < 0)
 		{
